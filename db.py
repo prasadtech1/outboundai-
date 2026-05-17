@@ -1,3 +1,4 @@
+
 """
 db.py — Supabase async database operations for OutboundAI
 All credentials loaded from environment only — never hardcoded.
@@ -7,7 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 from collections import defaultdict
-
+ 
 DEFAULTS = {
     "LIVEKIT_URL":           os.getenv("LIVEKIT_URL", ""),
     "LIVEKIT_API_KEY":       os.getenv("LIVEKIT_API_KEY", ""),
@@ -26,28 +27,28 @@ DEFAULTS = {
     "SUPABASE_SERVICE_KEY":  os.getenv("SUPABASE_SERVICE_KEY", ""),
     "DEEPGRAM_API_KEY":      os.getenv("DEEPGRAM_API_KEY", ""),
 }
-
+ 
 def _default(key: str) -> str:
     return os.getenv(key, DEFAULTS.get(key, ""))
-
+ 
 SUPABASE_URL = _default("SUPABASE_URL")
 SUPABASE_KEY = _default("SUPABASE_SERVICE_KEY")
-
+ 
 SENSITIVE_KEYS = {
     "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "GOOGLE_API_KEY",
     "VOBIZ_PASSWORD", "TWILIO_AUTH_TOKEN", "SUPABASE_SERVICE_KEY",
     "AWS_SECRET_ACCESS_KEY", "S3_SECRET_ACCESS_KEY", "CALCOM_API_KEY",
     "DEEPGRAM_API_KEY",
 }
-
+ 
 def _sdb():
     from supabase import create_client
     return create_client(_default("SUPABASE_URL"), _default("SUPABASE_SERVICE_KEY"))
-
+ 
 async def _adb():
     from supabase._async.client import create_client
     return await create_client(_default("SUPABASE_URL"), _default("SUPABASE_SERVICE_KEY"))
-
+ 
 def init_db() -> None:
     url = os.getenv("SUPABASE_URL", SUPABASE_URL)
     key = os.getenv("SUPABASE_SERVICE_KEY", SUPABASE_KEY)
@@ -61,9 +62,9 @@ def init_db() -> None:
     except Exception as exc:
         print(f"⚠️  Supabase connection failed: {exc}")
         print("   Run supabase_schema.sql in Supabase Dashboard → SQL Editor")
-
+ 
 # ── Settings ──────────────────────────────────────────────────────────────────
-
+ 
 async def get_all_settings() -> dict:
     db = await _adb()
     result = await db.table("settings").select("key, value").execute()
@@ -94,7 +95,7 @@ async def get_all_settings() -> dict:
         else:
             out[k] = {"value": v, "configured": bool(v)}
     return out
-
+ 
 async def save_settings(data: dict) -> None:
     db = await _adb()
     updated_at = datetime.now().isoformat()
@@ -105,21 +106,21 @@ async def save_settings(data: dict) -> None:
     ]
     if rows:
         await db.table("settings").upsert(rows, on_conflict="key").execute()
-
+ 
 async def get_setting(key: str, default: str = "") -> str:
     db = await _adb()
     result = await db.table("settings").select("value").eq("key", key).maybe_single().execute()
     if result and result.data:
         return result.data["value"]
     return _default(key) or default
-
+ 
 async def set_setting(key: str, value: str) -> None:
     db = await _adb()
     await db.table("settings").upsert(
         {"key": key, "value": value, "updated_at": datetime.now().isoformat()},
         on_conflict="key",
     ).execute()
-
+ 
 async def get_enabled_tools() -> list:
     raw = await get_setting("ENABLED_TOOLS", "")
     if not raw:
@@ -130,9 +131,9 @@ async def get_enabled_tools() -> list:
         return result if isinstance(result, list) else []
     except Exception:
         return []
-
+ 
 # ── Error / System Logs ───────────────────────────────────────────────────────
-
+ 
 async def log_error(source: str, message: str, detail: str = "", level: str = "error") -> None:
     try:
         db = await _adb()
@@ -143,7 +144,7 @@ async def log_error(source: str, message: str, detail: str = "", level: str = "e
         }).execute()
     except Exception:
         pass
-
+ 
 async def get_logs(level: Optional[str] = None, source: Optional[str] = None, limit: int = 200) -> list:
     db = await _adb()
     query = db.table("error_logs").select("*").order("timestamp", desc=True).limit(limit)
@@ -153,13 +154,13 @@ async def get_logs(level: Optional[str] = None, source: Optional[str] = None, li
         query = query.eq("source", source)
     result = await query.execute()
     return result.data or []
-
+ 
 async def clear_errors() -> None:
     db = await _adb()
     await db.table("error_logs").delete().neq("id", "").execute()
-
+ 
 # ── Appointments ──────────────────────────────────────────────────────────────
-
+ 
 async def insert_appointment(name: str, phone: str, date: str, time: str, service: str) -> str:
     full_id = str(uuid.uuid4())
     booking_id = full_id[:8].upper()
@@ -170,7 +171,7 @@ async def insert_appointment(name: str, phone: str, date: str, time: str, servic
         "status": "booked", "created_at": datetime.now().isoformat(),
     }).execute()
     return booking_id
-
+ 
 async def check_slot(date: str, time: str) -> bool:
     db = await _adb()
     result = await (
@@ -179,7 +180,7 @@ async def check_slot(date: str, time: str) -> bool:
         .maybe_single().execute()
     )
     return result.data is None
-
+ 
 async def get_next_available(date: str, time: str) -> str:
     try:
         dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
@@ -191,7 +192,7 @@ async def get_next_available(date: str, time: str) -> str:
             if await check_slot(dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")):
                 return f"{dt.strftime('%Y-%m-%d')} at {dt.strftime('%H:%M')}"
     return "no open slots found in the next 7 days"
-
+ 
 async def get_all_appointments(date_filter: Optional[str] = None) -> list:
     db = await _adb()
     query = db.table("appointments").select("*").order("date").order("time")
@@ -199,7 +200,7 @@ async def get_all_appointments(date_filter: Optional[str] = None) -> list:
         query = query.eq("date", date_filter)
     result = await query.execute()
     return result.data or []
-
+ 
 async def cancel_appointment(appointment_id: str) -> bool:
     db = await _adb()
     result = await (
@@ -207,14 +208,14 @@ async def cancel_appointment(appointment_id: str) -> bool:
         .eq("id", appointment_id).eq("status", "booked").execute()
     )
     return len(result.data or []) > 0
-
+ 
 async def get_appointments_by_phone(phone: str) -> list:
     db = await _adb()
     result = await db.table("appointments").select("*").eq("phone", phone).order("date", desc=True).execute()
     return result.data or []
-
+ 
 # ── Call Logs ─────────────────────────────────────────────────────────────────
-
+ 
 async def log_call(
     phone_number: str, lead_name: Optional[str], outcome: str, reason: str,
     duration_seconds: int, recording_url: Optional[str] = None, notes: Optional[str] = None,
@@ -230,23 +231,23 @@ async def log_call(
     if notes:
         row["notes"] = notes
     await db.table("call_logs").insert(row).execute()
-
+ 
 async def get_all_calls(page: int = 1, limit: int = 20) -> list:
     db = await _adb()
     offset = (page - 1) * limit
     result = await db.table("call_logs").select("*").order("timestamp", desc=True).range(offset, offset + limit - 1).execute()
     return result.data or []
-
+ 
 async def get_calls_by_phone(phone: str) -> list:
     db = await _adb()
     result = await db.table("call_logs").select("*").eq("phone_number", phone).order("timestamp", desc=True).execute()
     return result.data or []
-
+ 
 async def update_call_notes(call_id: str, notes: str) -> bool:
     db = await _adb()
     result = await db.table("call_logs").update({"notes": notes}).eq("id", call_id).execute()
     return len(result.data or []) > 0
-
+ 
 async def get_contacts() -> list:
     db = await _adb()
     result = await db.table("call_logs").select("*").order("timestamp", desc=True).execute()
@@ -264,9 +265,9 @@ async def get_contacts() -> list:
         if row.get("outcome") == "booked":
             contacts[phone]["booked"] += 1
     return sorted(contacts.values(), key=lambda c: c["last_call"], reverse=True)
-
+ 
 # ── Stats ─────────────────────────────────────────────────────────────────────
-
+ 
 async def get_stats() -> dict:
     db = await _adb()
     rows = (await db.table("call_logs").select("outcome, duration_seconds, timestamp").execute()).data or []
@@ -305,9 +306,9 @@ async def get_stats() -> dict:
         "avg_duration_seconds": round(avg_dur, 1), "booking_rate_percent": booking_rate,
         "outcomes": outcomes, "timeline": timeline, "duration_by_outcome": duration_by_outcome,
     }
-
+ 
 # ── Campaigns ─────────────────────────────────────────────────────────────────
-
+ 
 async def create_campaign(
     name: str, contacts_json: str, schedule_type: str = "once",
     schedule_time: str = "09:00", call_delay_seconds: int = 3,
@@ -327,43 +328,43 @@ async def create_campaign(
         row["agent_profile_id"] = agent_profile_id
     await db.table("campaigns").insert(row).execute()
     return campaign_id
-
+ 
 async def get_all_campaigns() -> list:
     db = await _adb()
     result = await db.table("campaigns").select("*").order("created_at", desc=True).execute()
     return result.data or []
-
+ 
 async def get_campaign(campaign_id: str) -> Optional[dict]:
     db = await _adb()
     result = await db.table("campaigns").select("*").eq("id", campaign_id).maybe_single().execute()
     return result.data if result else None
-
+ 
 async def update_campaign_status(campaign_id: str, status: str) -> bool:
     db = await _adb()
     result = await db.table("campaigns").update({"status": status}).eq("id", campaign_id).execute()
     return len(result.data or []) > 0
-
+ 
 async def update_campaign_run_stats(campaign_id: str, dispatched: int, failed: int) -> None:
     db = await _adb()
     await db.table("campaigns").update({
         "last_run_at": datetime.now().isoformat(),
         "total_dispatched": dispatched, "total_failed": failed, "status": "completed",
     }).eq("id", campaign_id).execute()
-
+ 
 async def delete_campaign(campaign_id: str) -> bool:
     db = await _adb()
     result = await db.table("campaigns").delete().eq("id", campaign_id).execute()
     return len(result.data or []) > 0
-
+ 
 # ── Contact Memory ────────────────────────────────────────────────────────────
-
+ 
 async def add_contact_memory(phone: str, insight: str) -> None:
     db = await _adb()
     await db.table("contact_memory").insert({
         "id": str(uuid.uuid4()), "phone_number": phone,
         "insight": insight[:1000], "created_at": datetime.now().isoformat(),
     }).execute()
-
+ 
 async def get_contact_memory(phone: str) -> list:
     db = await _adb()
     result = await (
@@ -371,7 +372,7 @@ async def get_contact_memory(phone: str) -> list:
         .eq("phone_number", phone).order("created_at", desc=True).limit(20).execute()
     )
     return result.data or []
-
+ 
 async def compress_contact_memory(phone: str, compressed: str) -> None:
     db = await _adb()
     await db.table("contact_memory").delete().eq("phone_number", phone).execute()
@@ -379,19 +380,19 @@ async def compress_contact_memory(phone: str, compressed: str) -> None:
         "id": str(uuid.uuid4()), "phone_number": phone,
         "insight": compressed[:2000], "created_at": datetime.now().isoformat(),
     }).execute()
-
+ 
 # ── Agent Profiles ────────────────────────────────────────────────────────────
-
+ 
 async def get_all_agent_profiles() -> list:
     db = await _adb()
     result = await db.table("agent_profiles").select("*").order("created_at").execute()
     return result.data or []
-
+ 
 async def get_agent_profile(profile_id: str) -> Optional[dict]:
     db = await _adb()
     result = await db.table("agent_profiles").select("*").eq("id", profile_id).maybe_single().execute()
     return result.data if result else None
-
+ 
 async def create_agent_profile(
     name: str, voice: str = "Aoede", model: str = "gemini-3.1-flash-live-preview",
     system_prompt: Optional[str] = None, enabled_tools: str = "[]", is_default: bool = False,
@@ -406,23 +407,22 @@ async def create_agent_profile(
         "is_default": 1 if is_default else 0, "created_at": datetime.now().isoformat(),
     }).execute()
     return profile_id
-
+ 
 async def update_agent_profile(profile_id: str, updates: dict) -> bool:
     db = await _adb()
     result = await db.table("agent_profiles").update(updates).eq("id", profile_id).execute()
     return len(result.data or []) > 0
-
+ 
 async def delete_agent_profile(profile_id: str) -> bool:
     db = await _adb()
     result = await db.table("agent_profiles").delete().eq("id", profile_id).execute()
     return len(result.data or []) > 0
-
+ 
 async def set_default_agent_profile(profile_id: str) -> None:
     db = await _adb()
     await db.table("agent_profiles").update({"is_default": 0}).neq("id", "placeholder").execute()
     await db.table("agent_profiles").update({"is_default": 1}).eq("id", profile_id).execute()
+ 
 async def get_errors(limit: int = 100) -> list:
-    return await get_logs(limit=limit)
-    async def get_errors(limit: int = 100) -> list:
-    """Alias for get_logs"""
+    """Alias for get_logs — required by server.py import"""
     return await get_logs(limit=limit)
