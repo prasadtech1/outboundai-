@@ -421,3 +421,5 @@ async def set_default_agent_profile(profile_id: str) -> None:
     db = await _adb()
     await db.table("agent_profiles").update({"is_default": 0}).neq("id", "placeholder").execute()
     await db.table("agent_profiles").update({"is_default": 1}).eq("id", profile_id).execute()
+async def get_errors(limit: int = 100) -> list:
+    return await get_logs(limit=limit)
